@@ -43,6 +43,7 @@ router.post('/', authenticateToken, async (req, res) => {
   } = req.body;
 
   try {
+    // 1. Créer le bien
     const newProperty = await prisma.property.create({
       data: {
         hostId: req.user.userId,
@@ -65,31 +66,31 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     });
 
+    // 2. Vérifie si l'utilisateur a déjà le rôle "host"
+    const hasHostRole = await prisma.role.findFirst({
+      where: {
+        userId: req.user.userId,
+        role: 'host'
+      }
+    });
+
+    // 3. Si ce n'est pas le cas, on lui attribue
+    if (!hasHostRole) {
+      await prisma.role.create({
+        data: {
+          userId: req.user.userId,
+          role: 'host',
+          active: true
+        }
+      });
+    }
+
     res.status(201).json(newProperty);
   } catch (err) {
-    console.error(err);
+    console.error('Erreur POST /properties :', err);
     res.status(500).json({ error: 'Erreur lors de la création du bien.' });
   }
 });
-
-// Vérifie si l'utilisateur a déjà le rôle "host"
-const hasHostRole = await prisma.role.findFirst({
-  where: {
-    userId: req.user.userId,
-    role: 'host'
-  }
-});
-
-// S'il ne l'a pas, on lui attribue
-if (!hasHostRole) {
-  await prisma.role.create({
-    data: {
-      userId: req.user.userId,
-      role: 'host',
-      active: true
-    }
-  });
-}
 
 // 📤 GET /properties : Lister tous les biens actifs
 router.get('/', async (req, res) => {
