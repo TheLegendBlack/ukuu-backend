@@ -34,6 +34,9 @@ router.post('/', authenticateToken, async (req, res) => {
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
     if (!property || property.hostId !== req.user.userId) {
       return res.status(403).json({ error: 'Non autorisé à assigner ce bien.' });
+      console.log('👤 User connecté :', req.user.userId);
+console.log('🏠 Propriétaire du bien :', property.hostId);
+
     }
 
     // Rechercher l'utilisateur à assigner
