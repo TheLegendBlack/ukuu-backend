@@ -6,10 +6,244 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  guest
+  host
+  supervisor
+}
+
+enum PropertyType {
+  apartment
+  house
+  villa
+  studio
+  room
+  event_hall
+  office
+  land
+}
+
+enum RentalType {
+  short_term
+  long_term
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+enum ReviewType {
+  property
+  user
+}
+
+enum MessageType {
+  text
+  system
+  booking_request
+  dispute
+}
+
+model User {
+  id             String       @id @default(uuid())
+  phoneNumber    String       @unique
+  firstName      String
+  lastName       String
+  password String
+  avatarUrl      String?
+  bio            String?
+  dateOfBirth    DateTime?
+  verified       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  roles          UserRoleOnUser[]
+  properties     Property[]   @relation("HostProperties")
+  bookings       Booking[]    @relation("GuestBookings")
+  reviewsGiven   Review[]     @relation("ReviewsGiven")
+  reviewsReceived Review[]    @relation("ReviewsReceived")
+  messagesSent   Message[]    @relation("MessagesSent")
+  messagesReceived Message[] @relation("MessagesReceived")
+  supervisions   Supervision[] @relation("Supervised")
+  notifications  Notification[]
+  disputesRaised Dispute[]    @relation("DisputesRaised")
+  documents      Document[]
+  assignedSupervisions Supervision[] @relation("AssignedSupervisions")
+}
+
+model UserRoleOnUser {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  role      UserRole
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, role])
+}
+
+model Property {
+  id             String        @id @default(uuid())
+  host           User          @relation("HostProperties", fields: [hostId], references: [id])
+  hostId         String
+  title          String
+  description    String?
+  propertyType   PropertyType
+  rentalType     RentalType
+  maxGuests      Int
+  bedrooms       Int
+  bathrooms      Int
+  pricePerNight  Float?
+  pricePerMonth  Float?
+  address        String
+  city           String
+  country        String        @default("Democratic Republic of Congo")
+  latitude       Float?
+  longitude      Float?
+  images         String[]
+  houseRules     String?
+  checkInTime    String?       @default("15:00:00")
+  checkOutTime   String?       @default("11:00:00")
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  equipment      PropertyEquipment[]
+  bookings       Booking[]
+  reviews        Review[]
+  availability   PropertyAvailability[]
+  supervisions   Supervision[]
+}
+
+model PropertyEquipment {
+  id          String    @id @default(uuid())
+  property    Property  @relation(fields: [propertyId], references: [id])
+  propertyId  String
+  name        String
+  category    String?
+  available   Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+}
+
+model Booking {
+  id              String       @id @default(uuid())
+  property        Property     @relation(fields: [propertyId], references: [id])
+  propertyId      String
+  guest           User         @relation("GuestBookings", fields: [guestId], references: [id])
+  guestId         String
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  guestsCount     Int
+  rentalType      RentalType
+  totalAmount     Float
+  status          BookingStatus @default(pending)
+  specialRequests String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  reviews         Review[]
+  messages        Message[]
+  disputes        Dispute[]
+}
+
+model Review {
+  id                 String      @id @default(uuid())
+  reviewer           User        @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewerId         String
+  reviewee           User?       @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  revieweeId         String?
+  property           Property?   @relation(fields: [propertyId], references: [id])
+  propertyId         String?
+  booking            Booking?    @relation(fields: [bookingId], references: [id])
+  bookingId          String?
+  reviewType         ReviewType
+  overallRating      Int
+  cleanlinessRating  Int?
+  communicationRating Int?
+  locationRating     Int?
+  accuracyRating     Int?
+  valueRating        Int?
+  comment            String?
+  createdAt          DateTime    @default(now())
+}
+
+model Message {
+  id           String      @id @default(uuid())
+  sender       User        @relation("MessagesSent", fields: [senderId], references: [id])
+  senderId     String
+  recipient    User        @relation("MessagesReceived", fields: [recipientId], references: [id])
+  recipientId  String
+  booking      Booking?    @relation(fields: [bookingId], references: [id])
+  bookingId    String?
+  messageType  MessageType @default(text)
+  content      String
+  readAt       DateTime?
+  createdAt    DateTime    @default(now())
+}
+
+model Supervision {
+  id           String     @id @default(uuid())
+  property     Property   @relation(fields: [propertyId], references: [id])
+  propertyId   String
+  supervisor   User       @relation("Supervised", fields: [supervisorId], references: [id])
+  supervisorId String
+  assignedBy   User @relation("AssignedSupervisions", fields: [assignedById], references: [id])
+  assignedById String
+  active       Boolean    @default(true)
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([propertyId, supervisorId])
+}
+
+model PropertyAvailability {
+  id             String     @id @default(uuid())
+  property       Property   @relation(fields: [propertyId], references: [id])
+  propertyId     String
+  date           DateTime
+  available      Boolean    @default(true)
+  priceOverride  Float?
+  createdAt      DateTime   @default(now())
+
+  @@unique([propertyId, date])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String   // sms or system
+  content   String
+  sentAt    DateTime @default(now())
+  read      Boolean  @default(false)
+}
+
+model Dispute {
+  id           String   @id @default(uuid())
+  booking      Booking  @relation(fields: [bookingId], references: [id])
+  bookingId    String
+  raisedBy     User     @relation("DisputesRaised", fields: [raisedById], references: [id])
+  raisedById   String
+  againstUser  String
+  reason       String
+  resolution   String?
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  type         String   // contract, eviction_notice, legal_notice
+  fileUrl      String
+  generatedAt  DateTime @default(now())
 }
