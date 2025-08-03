@@ -44,7 +44,7 @@ console.log('🏠 Propriétaire du bien :', property.hostId);
     if (!targetUser) return res.status(404).json({ error: 'Utilisateur non trouvé.' });
 
     // Ajouter le rôle "supervisor" s’il ne l’a pas
-    const existingRole = await prisma.role.findFirst({
+    const existingRole = await prisma.userRoleOnUser.findFirst({
       where: {
         userId: targetUser.id,
         role: 'supervisor'
@@ -52,7 +52,7 @@ console.log('🏠 Propriétaire du bien :', property.hostId);
     });
 
     if (!existingRole) {
-      await prisma.role.create({
+      await prisma.userRoleOnUser.create({
         data: {
           userId: targetUser.id,
           role: 'supervisor',
