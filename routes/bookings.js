@@ -28,17 +28,17 @@ router.post('/', authenticateToken, async (req, res) => {
     checkInDate,
     checkOutDate,
     guestsCount,
-    rentalType,
     specialRequests
   } = req.body;
 
   try {
-    // 1. Récupérer le bien
+    // 1. Récupérer le bien avec son type de location
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
         pricePerNight: true,
-        pricePerMonth: true
+        pricePerMonth: true,
+        rentalType: true
       }
     });
 
@@ -46,19 +46,19 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Bien introuvable.' });
     }
 
-    // 2. Calcul automatique du montant
+    // 2. Calcul du montant
     const start = new Date(checkInDate);
     const end = new Date(checkOutDate);
     const durationInDays = (end - start) / (1000 * 60 * 60 * 24);
 
     let totalAmount = 0;
 
-    if (rentalType === 'short_term') {
+    if (property.rentalType === 'short_term') {
       if (!property.pricePerNight) {
         return res.status(400).json({ error: 'Tarif par nuit manquant pour ce bien.' });
       }
       totalAmount = durationInDays * property.pricePerNight;
-    } else if (rentalType === 'long_term') {
+    } else if (property.rentalType === 'long_term') {
       if (!property.pricePerMonth) {
         return res.status(400).json({ error: 'Tarif mensuel manquant pour ce bien.' });
       }
@@ -67,7 +67,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Type de location invalide.' });
     }
 
-    // 3. Créer la réservation
+    // 3. Création de la réservation
     const booking = await prisma.booking.create({
       data: {
         propertyId,
@@ -75,7 +75,7 @@ router.post('/', authenticateToken, async (req, res) => {
         checkInDate: start,
         checkOutDate: end,
         guestsCount,
-        rentalType,
+        rentalType: property.rentalType, // ✅ Injecté automatiquement
         totalAmount,
         specialRequests
       }
