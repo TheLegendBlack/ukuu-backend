@@ -72,6 +72,25 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// Vérifie si l'utilisateur a déjà le rôle "host"
+const hasHostRole = await prisma.role.findFirst({
+  where: {
+    userId: req.user.userId,
+    role: 'host'
+  }
+});
+
+// S'il ne l'a pas, on lui attribue
+if (!hasHostRole) {
+  await prisma.role.create({
+    data: {
+      userId: req.user.userId,
+      role: 'host',
+      active: true
+    }
+  });
+}
+
 // 📤 GET /properties : Lister tous les biens actifs
 router.get('/', async (req, res) => {
   try {

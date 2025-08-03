@@ -16,6 +16,7 @@ app.get('/', (req, res) => {
 app.use('/auth', require('./routes/auth'));
 app.use('/users', require('./routes/users'));
 app.use('/properties', require('./routes/properties'));
+app.use('/supervisions', require('./routes/supervisions'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
