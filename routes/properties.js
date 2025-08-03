@@ -67,16 +67,16 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     // 2. Vérifie si l'utilisateur a déjà le rôle "host"
-    const hasHostRole = await prisma.role.findFirst({
-      where: {
-        userId: req.user.userId,
-        role: 'host'
-      }
-    });
+    const hasHostRole = await prisma.userRoleOnUser.findFirst({
+  where: {
+    userId: req.user.userId,
+    role: 'host'
+  }
+});
 
     // 3. Si ce n'est pas le cas, on lui attribue
     if (!hasHostRole) {
-      await prisma.role.create({
+      await prisma.userRoleOnUser.create({
         data: {
           userId: req.user.userId,
           role: 'host',
