@@ -57,7 +57,7 @@ router.post('/', authenticateToken, async (req, res) => {
         pricePerMonth,
         address,
         city,
-        country: country || 'Democratic Republic of Congo',
+        country: country || 'Republic of Congo',
         latitude,
         longitude,
         images,
@@ -139,21 +139,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
-
-// 🔐 Middleware d'authentification
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.sendStatus(403);
-
-    req.user = decoded;
-    next();
-  });
-}
 
 // 🔄 Modifier un bien existant (propriétaire uniquement)
 router.patch('/:id', authenticateToken, async (req, res) => {
