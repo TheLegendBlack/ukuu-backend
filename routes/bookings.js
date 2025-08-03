@@ -29,17 +29,51 @@ router.post('/', authenticateToken, async (req, res) => {
     checkOutDate,
     guestsCount,
     rentalType,
-    totalAmount,
     specialRequests
   } = req.body;
 
   try {
+    // 1. Récupérer le bien
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        pricePerNight: true,
+        pricePerMonth: true
+      }
+    });
+
+    if (!property) {
+      return res.status(404).json({ error: 'Bien introuvable.' });
+    }
+
+    // 2. Calcul automatique du montant
+    const start = new Date(checkInDate);
+    const end = new Date(checkOutDate);
+    const durationInDays = (end - start) / (1000 * 60 * 60 * 24);
+
+    let totalAmount = 0;
+
+    if (rentalType === 'short_term') {
+      if (!property.pricePerNight) {
+        return res.status(400).json({ error: 'Tarif par nuit manquant pour ce bien.' });
+      }
+      totalAmount = durationInDays * property.pricePerNight;
+    } else if (rentalType === 'long_term') {
+      if (!property.pricePerMonth) {
+        return res.status(400).json({ error: 'Tarif mensuel manquant pour ce bien.' });
+      }
+      totalAmount = property.pricePerMonth;
+    } else {
+      return res.status(400).json({ error: 'Type de location invalide.' });
+    }
+
+    // 3. Créer la réservation
     const booking = await prisma.booking.create({
       data: {
         propertyId,
         guestId: req.user.userId,
-        checkInDate: new Date(checkInDate),
-        checkOutDate: new Date(checkOutDate),
+        checkInDate: start,
+        checkOutDate: end,
         guestsCount,
         rentalType,
         totalAmount,
