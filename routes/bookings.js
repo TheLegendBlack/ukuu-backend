@@ -22,7 +22,7 @@ function authenticateToken(req, res, next) {
 }
 
 // 🔐 Middleware d'autorisation par rôle
-async function authorizeRoles(...allowedRoles) {
+function authorizeRoles(...allowedRoles) {
   return async (req, res, next) => {
     try {
       const roles = await prisma.userRoleOnUser.findMany({
@@ -48,6 +48,8 @@ async function authorizeRoles(...allowedRoles) {
   };
 }
 
+// ✅ Middleware prêt à l'emploi pour les routes admin
+const isAdmin = authorizeRoles('admin');
 
 // 📥 POST /bookings — Créer une réservation
 router.post('/', authenticateToken, async (req, res) => {
@@ -249,7 +251,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.get(
   '/all',
   authenticateToken,
-  authorizeRoles('admin'), // ✅ Seul le rôle 'admin' est autorisé ici
+  isAdmin, // ✅ Seul le rôle 'admin' est autorisé ici
   async (req, res) => {
     try {
       const bookings = await prisma.booking.findMany({
