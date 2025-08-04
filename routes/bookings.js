@@ -204,18 +204,34 @@ router.get('/received', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ PATCH /bookings/:id/status — Modifier le statut (host uniquement)
+// ✅ PATCH /bookings/:id/status — Confirmé par host OU superviseur assigné
 router.patch('/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body; // confirmed, cancelled, completed
+  const userId = req.user.userId;
 
   try {
-    const booking = await prisma.booking.findUnique({ where: { id } });
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: { property: true }
+    });
+
     if (!booking) return res.status(404).json({ error: 'Réservation introuvable.' });
 
-    // Vérifie si l'utilisateur est le propriétaire du bien
-    const property = await prisma.property.findUnique({ where: { id: booking.propertyId } });
-    if (property.hostId !== req.user.userId) {
+    const property = booking.property;
+
+    // Vérifier si user est host ou superviseur assigné
+    const isHost = property.hostId === userId;
+
+    const isAssignedSupervisor = await prisma.supervision.findFirst({
+      where: {
+        propertyId: property.id,
+        supervisorId: userId,
+        active: true
+      }
+    });
+
+    if (!isHost && !isAssignedSupervisor) {
       return res.status(403).json({ error: 'Non autorisé à modifier cette réservation.' });
     }
 
