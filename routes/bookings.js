@@ -21,6 +21,34 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// 🔐 Middleware d'autorisation par rôle
+async function authorizeRoles(...allowedRoles) {
+  return async (req, res, next) => {
+    try {
+      const roles = await prisma.userRoleOnUser.findMany({
+        where: {
+          userId: req.user.userId,
+          active: true
+        },
+        select: { role: true }
+      });
+
+      const userRoles = roles.map(r => r.role);
+      const hasAccess = userRoles.some(role => allowedRoles.includes(role));
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: 'Accès interdit. Rôle insuffisant.' });
+      }
+
+      next();
+    } catch (err) {
+      console.error('Erreur autorisation rôle :', err);
+      res.status(500).json({ error: 'Erreur serveur.' });
+    }
+  };
+}
+
+
 // 📥 POST /bookings — Créer une réservation
 router.post('/', authenticateToken, async (req, res) => {
   const {
@@ -113,6 +141,67 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+// ✏️ PATCH /bookings/:id — Modifier une réservation (par guest)
+router.patch('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { checkInDate, checkOutDate, guestsCount, specialRequests } = req.body;
+
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking || booking.guestId !== req.user.userId) {
+      return res.status(403).json({ error: 'Non autorisé.' });
+    }
+
+    const updates = {};
+    if (checkInDate) updates.checkInDate = new Date(checkInDate);
+    if (checkOutDate) updates.checkOutDate = new Date(checkOutDate);
+    if (guestsCount !== undefined) updates.guestsCount = guestsCount;
+    if (specialRequests !== undefined) updates.specialRequests = specialRequests;
+
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: updates
+    });
+
+    res.json({ message: 'Réservation modifiée.', booking: updated });
+  } catch (err) {
+    console.error('Erreur PATCH /bookings/:id :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// 📬 GET /bookings/received — Réservations reçues (host)
+router.get('/received', authenticateToken, async (req, res) => {
+  try {
+    const properties = await prisma.property.findMany({
+      where: { hostId: req.user.userId },
+      select: { id: true }
+    });
+
+    const propertyIds = properties.map(p => p.id);
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        propertyId: { in: propertyIds }
+      },
+      include: {
+        guest: {
+          select: { firstName: true, lastName: true, phoneNumber: true }
+        },
+        property: {
+          select: { title: true, address: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(bookings);
+  } catch (err) {
+    console.error('Erreur GET /bookings/received :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ✅ PATCH /bookings/:id/status — Modifier le statut (host uniquement)
 router.patch('/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
@@ -155,5 +244,33 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
+
+// 🌐 GET /bookings/all — Toutes les réservations — Accès réservé aux admins uniquement
+router.get(
+  '/all',
+  authenticateToken,
+  authorizeRoles('admin'), // ✅ Seul le rôle 'admin' est autorisé ici
+  async (req, res) => {
+    try {
+      const bookings = await prisma.booking.findMany({
+        include: {
+          guest: {
+            select: { firstName: true, lastName: true }
+          },
+          property: {
+            select: { title: true, city: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      res.json(bookings);
+    } catch (err) {
+      console.error('Erreur GET /bookings/all :', err);
+      res.status(500).json({ error: 'Erreur serveur.' });
+    }
+  }
+);
+
 
 module.exports = router;
