@@ -171,4 +171,35 @@ router.patch('/:id/reject', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// 🛡️ Admin : annuler/retirer une demande KYC (même si approuvée)
+router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const kyc = await prisma.kycVerification.findUnique({ where: { id } });
+    if (!kyc) return res.status(404).json({ error: 'Demande KYC introuvable.' });
+
+    await prisma.$transaction(async (tx) => {
+      if (kyc.status === 'approved') {
+        await tx.user.update({
+          where: { id: kyc.userId },
+          data: { verified: false }
+        });
+      }
+
+      await tx.kycVerification.delete({ where: { id } });
+    });
+
+    res.json({
+      message: kyc.status === 'approved'
+        ? 'KYC annulé et statut vérifié retiré.'
+        : 'Demande KYC supprimée.'
+    });
+  } catch (err) {
+    console.error('Erreur DELETE /kyc/:id :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+
 module.exports = router;
