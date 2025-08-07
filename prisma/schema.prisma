@@ -55,6 +55,11 @@ enum MessageType {
   dispute
 }
 
+enum KycStatus {
+  pending
+  approved
+  rejected
+}
 model User {
   id             String       @id @default(uuid())
   phoneNumber    String       @unique
@@ -79,6 +84,10 @@ model User {
   disputesRaised Dispute[]    @relation("DisputesRaised")
   documents      Document[]
   assignedSupervisions Supervision[] @relation("AssignedSupervisions")
+    // ...
+  kycSubmissions     KycVerification[]
+  kycReviewed        KycVerification[] @relation("KycReviewedBy")
+
 }
 
 model UserRoleOnUser {
@@ -248,3 +257,16 @@ model Document {
   fileUrl      String
   generatedAt  DateTime @default(now())
 }
+model KycVerification {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  status       KycStatus @default(pending)
+  documentUrls String[]  // URLs vers les fichiers (front: upload vers storage → donner les URLs ici)
+  note         String?   // Remarques/rejet
+  reviewedBy   User?    @relation("KycReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById String?
+  createdAt    DateTime  @default(now())
+  reviewedAt   DateTime?
+}
+

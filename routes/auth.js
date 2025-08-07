@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
         firstName,
         lastName,
         phoneNumber,
-        verified: true, // ✅ à changer plus tard si SMS réel
+        verified: false, // ✅ à changer plus tard si SMS réel
         bio: '',
         roles: {
           create: {

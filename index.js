@@ -18,6 +18,8 @@ app.use('/users', require('./routes/users'));
 app.use('/properties', require('./routes/properties'));
 app.use('/supervisions', require('./routes/supervisions'));
 app.use('/bookings', require('./routes/bookings'));
+app.use('/kyc', require('./routes/kyc'));
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
