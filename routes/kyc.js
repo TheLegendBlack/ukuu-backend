@@ -42,17 +42,14 @@ const isAdmin = authorizeRoles('admin');
 
 // ---------------------------
 // 👤 Utilisateur : soumettre KYC
-// POST /kyc/submit
-// body: { documentUrls: ["https://...","https://..."], note?: "..." }
 router.post('/submit', authenticateToken, async (req, res) => {
-  const { documentUrls, note } = req.body;
+  const { documentUrls, note } = req.body || {};
 
   if (!Array.isArray(documentUrls) || documentUrls.length === 0) {
     return res.status(400).json({ error: 'Au moins un document est requis.' });
   }
 
   try {
-    // Option : empêcher les doublons "pending"
     const existingPending = await prisma.kycVerification.findFirst({
       where: { userId: req.user.userId, status: 'pending' }
     });
@@ -76,7 +73,6 @@ router.post('/submit', authenticateToken, async (req, res) => {
 });
 
 // 👤 Utilisateur : voir ma dernière demande KYC
-// GET /kyc/mine
 router.get('/mine', authenticateToken, async (req, res) => {
   try {
     const last = await prisma.kycVerification.findFirst({
@@ -91,7 +87,6 @@ router.get('/mine', authenticateToken, async (req, res) => {
 });
 
 // 🛡️ Admin : lister les KYC en attente
-// GET /kyc/pending
 router.get('/pending', authenticateToken, isAdmin, async (req, res) => {
   try {
     const list = await prisma.kycVerification.findMany({
@@ -147,10 +142,9 @@ router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
 });
 
 // 🛡️ Admin : approuver
-// PATCH /kyc/:id/approve  body: { note?: string }
 router.patch('/:id/approve', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
-  const { note } = req.body;
+  const { note } = req.body || {};
 
   try {
     const kyc = await prisma.kycVerification.findUnique({ where: { id } });
@@ -169,7 +163,7 @@ router.patch('/:id/approve', authenticateToken, isAdmin, async (req, res) => {
       }),
       prisma.user.update({
         where: { id: kyc.userId },
-        data: { verified: true } // ✅ c’est ici que l’utilisateur devient “vérifié”
+        data: { verified: true }
       })
     ]);
 
@@ -181,10 +175,9 @@ router.patch('/:id/approve', authenticateToken, isAdmin, async (req, res) => {
 });
 
 // 🛡️ Admin : rejeter
-// PATCH /kyc/:id/reject  body: { note?: string }
 router.patch('/:id/reject', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
-  const { note } = req.body;
+  const { note } = req.body || {};
 
   try {
     const kyc = await prisma.kycVerification.findUnique({ where: { id } });
@@ -201,7 +194,6 @@ router.patch('/:id/reject', authenticateToken, isAdmin, async (req, res) => {
       }
     });
 
-    // L’utilisateur reste verified=false
     res.json({ message: 'KYC rejeté.', kyc: updated });
   } catch (err) {
     console.error('Erreur PATCH /kyc/:id/reject :', err);
@@ -224,7 +216,6 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
           data: { verified: false }
         });
       }
-
       await tx.kycVerification.delete({ where: { id } });
     });
 
@@ -238,6 +229,5 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
-
 
 module.exports = router;
