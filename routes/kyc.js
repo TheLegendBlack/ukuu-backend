@@ -108,6 +108,44 @@ router.get('/pending', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// 🛡️ Admin : voir le détail d'une demande KYC
+router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const kyc = await prisma.kycVerification.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            verified: true
+          }
+        },
+        reviewedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    if (!kyc) {
+      return res.status(404).json({ error: 'Demande KYC introuvable.' });
+    }
+
+    res.json(kyc);
+  } catch (err) {
+    console.error('Erreur GET /kyc/:id :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // 🛡️ Admin : approuver
 // PATCH /kyc/:id/approve  body: { note?: string }
 router.patch('/:id/approve', authenticateToken, isAdmin, async (req, res) => {
