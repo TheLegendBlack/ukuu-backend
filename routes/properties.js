@@ -298,4 +298,142 @@ router.patch('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ===== Helpers: droits host/superviseur =====
+async function isHostOrSupervisor(userId, propertyId) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { hostId: true }
+  });
+  if (!property) return { ok: false, reason: 'NOT_FOUND' };
+  if (property.hostId === userId) return { ok: true };
+
+  const supervision = await prisma.supervision.findFirst({
+    where: { propertyId, supervisorId: userId, active: true },
+    select: { id: true }
+  });
+  return { ok: !!supervision };
+}
+
+// ===== Availability: BULK UPSERT =====
+// POST /properties/:id/availability/bulk
+router.post('/:id/availability/bulk', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { from, to, available = false, priceOverride } = req.body || {};
+
+  try {
+    // 1) Permissions
+    const perm = await isHostOrSupervisor(req.user.userId, id);
+    if (!perm.ok) {
+      if (perm.reason === 'NOT_FOUND') return res.status(404).json({ error: 'Bien introuvable.' });
+      return res.status(403).json({ error: 'Non autorisé.' });
+    }
+
+    // 2) Dates
+    const start = parseISODate(from);
+    const end   = parseISODate(to);
+    if (!start || !end || !(end > start)) {
+      return res.status(400).json({ error: 'Paramètres from/to invalides. Format attendu YYYY-MM-DD.' });
+    }
+
+    // 3) Traitement
+    // available=false  -> block
+    // available=true + priceOverride -> autoriser + prix spécial
+    // available=true sans priceOverride -> remove overrides (clear)
+    const ops = [];
+    for (let d = new Date(start); d < end; d = addDays(d, 1)) {
+      const dayUTC = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+      if (available === true && (priceOverride === undefined || priceOverride === null)) {
+        // CLEAR: on supprime les overrides pour ce jour
+        ops.push(
+          prisma.propertyAvailability.deleteMany({
+            where: { propertyId: id, date: dayUTC }
+          })
+        );
+      } else {
+        // UPSERT: on crée/met à jour la ligne pour ce jour
+        // (si elle n’existe pas, on la crée; sinon on met à jour)
+        ops.push(
+          prisma.propertyAvailability.upsert({
+            where: { propertyId_date: { propertyId: id, date: dayUTC } },
+            update: {
+              available: !!available,
+              priceOverride: priceOverride !== undefined ? priceOverride : null
+            },
+            create: {
+              propertyId: id,
+              date: dayUTC,
+              available: !!available,
+              priceOverride: priceOverride !== undefined ? priceOverride : null
+            }
+          })
+        );
+      }
+    }
+
+    await prisma.$transaction(ops);
+    return res.json({ message: 'Disponibilités mises à jour.' });
+  } catch (err) {
+    console.error('Erreur POST /properties/:id/availability/bulk :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ===== Availability: BULK DELETE (clear) =====
+// DELETE /properties/:id/availability/bulk?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.delete('/:id/availability/bulk', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { from, to } = req.query || {};
+
+  try {
+    const perm = await isHostOrSupervisor(req.user.userId, id);
+    if (!perm.ok) {
+      if (perm.reason === 'NOT_FOUND') return res.status(404).json({ error: 'Bien introuvable.' });
+      return res.status(403).json({ error: 'Non autorisé.' });
+    }
+
+    const start = parseISODate(from);
+    const end   = parseISODate(to);
+    if (!start || !end || !(end > start)) {
+      return res.status(400).json({ error: 'Paramètres from/to invalides.' });
+    }
+
+    await prisma.propertyAvailability.deleteMany({
+      where: {
+        propertyId: id,
+        date: { gte: start, lt: end }
+      }
+    });
+
+    res.json({ message: 'Overrides supprimés sur la période.' });
+  } catch (err) {
+    console.error('Erreur DELETE /properties/:id/availability/bulk :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ===== (Optionnel) Lister les overrides existants =====
+// GET /properties/:id/availability/overrides
+router.get('/:id/availability/overrides', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const perm = await isHostOrSupervisor(req.user.userId, id);
+    if (!perm.ok) {
+      if (perm.reason === 'NOT_FOUND') return res.status(404).json({ error: 'Bien introuvable.' });
+      return res.status(403).json({ error: 'Non autorisé.' });
+    }
+
+    const rows = await prisma.propertyAvailability.findMany({
+      where: { propertyId: id },
+      orderBy: { date: 'asc' }
+    });
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erreur GET /properties/:id/availability/overrides :', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 module.exports = router;
